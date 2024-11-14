@@ -22,38 +22,52 @@ headers = {
 
 audio_path = "E:\\recorded_audio.wav"  # Ruta donde se guardará el audio
 
-# Texto a mostrar
+# Variable para controlar la grabación
+is_recording = False
 
 def dibujartiempo(tiempo):
     canvas.clear(0xEEEEEE)  # Limpiar el canvas
-    texto = u"grabando: quedan "+str(tiempo)+" segundos"
+    texto = u"Grabando: han transcurrido " + str(tiempo) + " segundos"
     canvas.text((10, 20), texto, fill=0x000000, font="dense")  # Dibujar el texto
-    e32.ao_sleep(1)
+
+def stop_recording():
+    global is_recording
+    is_recording = False
+    update_menu()
+
+def start_recording():
+    global is_recording
+    is_recording = True
+    update_menu()
+    record_audio()
 
 # Función para grabar el audio
 def record_audio():
-    global audio_path
+    global audio_path, is_recording
 
     # Verificar si el archivo ya existe y eliminarlo
     if os.path.exists(audio_path):
         os.remove(audio_path)
-        
+
     rec = audio.Sound.open(audio_path)
     rec.record()  # Iniciar grabación
 
-    dibujartiempo(5)
-    dibujartiempo(4)
-    dibujartiempo(3)
-    dibujartiempo(2)
-    dibujartiempo(1)
+    tiempo_transcurrido = 0
+
+    # Actualizar el canvas con el tiempo transcurrido mientras se graba
+    while is_recording:
+        dibujartiempo(tiempo_transcurrido)
+        e32.ao_sleep(1)  # Pausa de 1 segundo
+        tiempo_transcurrido += 1
+
+    # Detener la grabación
+    rec.stop()
+    rec.close()
 
     canvas.clear(0xEEEEEE)  # Limpiar el canvas
-    texto = u"Envie el audio para generar la imagen"
+    texto = u"Procesando..."
     canvas.text((10, 20), texto, fill=0x000000, font="dense")  # Dibujar el texto
-
-    rec.stop()  # Detener grabación
-    rec.close()
-    appuifw.note(u"Grabación completada", "conf")
+    send_audio()
 
 def ver_imagen():     
     image_path = "E:\\generated_image.jpg"   
@@ -104,21 +118,42 @@ def send_audio():
 
         print("Imagen guardada en:", image_path)
         ver_imagen()
+        update_menu()
 
     except Exception:
+        update_menu()
         print("Error al conectar con la API o procesar el audio")
 
-# Menú simple
-appuifw.app.menu = [
-    (u"Grabar audio", record_audio),
-    (u"Audio a Imagen", send_audio),
-    (u"Ver Imagen Guarda", ver_imagen)
-]
+def update_menu():
+    #Actualizar el menú dependiendo del estado de la grabación.
+    if is_recording:
+        appuifw.app.menu = [
+            (u"Detener grabación", stop_recording)
+        ]
+    else:
+        appuifw.app.menu = [
+            (u"Grabar audio", start_recording)
+        ]
+        #(u"Audio a Imagen", send_audio)
+
+"""def update_left_button():
+    #Actualizar la función del botón izquierdo (menú) dependiendo del estado de la grabación.
+    if is_recording:
+        appuifw.app.left_softkey = (u"Detener grabación", stop_recording)
+    else:
+        appuifw.app.left_softkey = (u"Grabar audio", start_recording)"""
+
+# Inicializar el menú
+update_menu()
 
 # Mantener la aplicación corriendo hasta que se cierre
 def salir():
+    stop_recording()
     app_lock.signal()
 
+# Configurar el botón derecho para cerrar la aplicación
 appuifw.app.exit_key_handler = salir
+
+# Configurar el botón izquierdo para iniciar y detener la grabación
 app_lock = e32.Ao_lock()
 app_lock.wait()
